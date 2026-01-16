@@ -13,16 +13,17 @@ func main() {
 		Handler: mux,
 		Addr:    ":" + port,
 	}
+	appConfig := apiConfig{}
 
-	mux.Handle(appPath, http.StripPrefix(appPath, http.FileServer(http.Dir("."))))
-	mux.HandleFunc("/healthz", statusHandler)
+	fileServerHandler := http.StripPrefix(appPath, http.FileServer(http.Dir(".")))
+	mux.Handle(appPath, appConfig.middlewareMetricsInc(fileServerHandler))
+	mux.HandleFunc("/healthz", readinessHandler)
+
+	mux.HandleFunc("/metrics", appConfig.handlerMetrics)
+
+	mux.HandleFunc("/reset", appConfig.handlerReset)
 
 	log.Println("Starting server on localhost:8080")
 
 	log.Fatal(server.ListenAndServe())
-}
-
-func statusHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
 }
