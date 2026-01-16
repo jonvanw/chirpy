@@ -7,7 +7,7 @@ import (
 
 func main() {
 	const port ="8080"
-	const appPath = "/app/"
+	const appPrefix = "/app/"
 	mux := http.NewServeMux()
 	server := http.Server{
 		Handler: mux,
@@ -15,13 +15,16 @@ func main() {
 	}
 	appConfig := apiConfig{}
 
-	fileServerHandler := http.StripPrefix(appPath, http.FileServer(http.Dir(".")))
-	mux.Handle(appPath, appConfig.middlewareMetricsInc(fileServerHandler))
-	mux.HandleFunc("/healthz", readinessHandler)
+	fileServerHandler := http.StripPrefix(appPrefix, http.FileServer(http.Dir(".")))
+	mux.Handle(appPrefix, appConfig.middlewareMetricsInc(fileServerHandler))
 
-	mux.HandleFunc("/metrics", appConfig.handlerMetrics)
+	mux.HandleFunc("GET /api/healthz", readinessHandler)
 
-	mux.HandleFunc("/reset", appConfig.handlerReset)
+	mux.HandleFunc("POST /api/validate_chirp", HandleValidateChirp)
+
+	mux.HandleFunc("GET /admin/metrics", appConfig.handlerMetrics)
+
+	mux.HandleFunc("POST /admin/reset", appConfig.handlerReset)
 
 	log.Println("Starting server on localhost:8080")
 

@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
-	"strconv"
 	"sync/atomic"
 )
 
@@ -19,10 +19,21 @@ func (a *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 
 func (a *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Hits: " + strconv.Itoa(int(a.fileserverHits.Load()))))
+	w.Header().Set("Content-Type", "text/html")
+	msg := fmt.Sprintf(metricsHtmlTemplate, a.fileserverHits.Load())
+	w.Write([]byte(msg))
 }
 
 func (a *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
+	a.fileserverHits.Store(0)
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Hits: " + strconv.Itoa(int(a.fileserverHits.Load()))))
+	w.Write([]byte("Hit counter reset\n"))
 }
+
+const metricsHtmlTemplate = 
+`<html>
+  <body>
+    <h1>Welcome, Chirpy Admin</h1>
+    <p>Chirpy has been visited %d times!</p>
+  </body>
+</html>`
