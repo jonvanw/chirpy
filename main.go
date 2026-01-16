@@ -54,6 +54,8 @@ func main() {
 
 	mux.HandleFunc("POST /api/users", appConfig.handleAddUser)
 
+	mux.HandleFunc("POST /api/login", appConfig.handleLogin)
+
 	log.Println("Starting server on localhost:8080")
 
 	log.Fatal(server.ListenAndServe())
