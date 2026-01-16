@@ -21,12 +21,6 @@ func (a *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(msg))
 }
 
-func (a *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
-	a.fileserverHits.Store(0)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Hit counter reset\n"))
-}
-
 const metricsHtmlTemplate = 
 `<html>
   <body>

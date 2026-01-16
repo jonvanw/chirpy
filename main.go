@@ -19,6 +19,7 @@ func main() {
 
 	godotenv.Load()
 	dbUrl := os.Getenv("DB_URL")
+
 	db, err := sql.Open("postgres", dbUrl)
 	if err != nil {
 		log.Fatal(err)
@@ -26,6 +27,7 @@ func main() {
 	defer db.Close()
 	appConfig := apiConfig{
 		dbQueries: database.New(db),
+		platform: os.Getenv("PLATFORM"),
 	}
 
 	mux := http.NewServeMux()
@@ -38,13 +40,15 @@ func main() {
 	fileServerHandler := http.StripPrefix(appPrefix, http.FileServer(http.Dir(".")))
 	mux.Handle(appPrefix, appConfig.middlewareMetricsInc(fileServerHandler))
 
+	mux.HandleFunc("GET /admin/metrics", appConfig.handlerMetrics)
+
+	mux.HandleFunc("POST /admin/reset", appConfig.handlerReset)
+
 	mux.HandleFunc("GET /api/healthz", readinessHandler)
 
 	mux.HandleFunc("POST /api/validate_chirp", HandleValidateChirp)
 
-	mux.HandleFunc("GET /admin/metrics", appConfig.handlerMetrics)
-
-	mux.HandleFunc("POST /admin/reset", appConfig.handlerReset)
+	mux.HandleFunc("POST /api/users", appConfig.handleAddUser)
 
 	log.Println("Starting server on localhost:8080")
 
@@ -54,4 +58,5 @@ func main() {
 type apiConfig struct {
 	fileserverHits atomic.Int32
 	dbQueries 	*database.Queries
+	platform string
 }
