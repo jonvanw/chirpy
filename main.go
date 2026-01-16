@@ -1,19 +1,39 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
+	"os"
+	"sync/atomic"
+
+	"github.com/jonvanw/chirpy/internal/database"
+
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 func main() {
 	const port ="8080"
 	const appPrefix = "/app/"
+
+	godotenv.Load()
+	dbUrl := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbUrl)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+	appConfig := apiConfig{
+		dbQueries: database.New(db),
+	}
+
 	mux := http.NewServeMux()
 	server := http.Server{
 		Handler: mux,
 		Addr:    ":" + port,
 	}
-	appConfig := apiConfig{}
+	
 
 	fileServerHandler := http.StripPrefix(appPrefix, http.FileServer(http.Dir(".")))
 	mux.Handle(appPrefix, appConfig.middlewareMetricsInc(fileServerHandler))
@@ -29,4 +49,9 @@ func main() {
 	log.Println("Starting server on localhost:8080")
 
 	log.Fatal(server.ListenAndServe())
+}
+
+type apiConfig struct {
+	fileserverHits atomic.Int32
+	dbQueries 	*database.Queries
 }
