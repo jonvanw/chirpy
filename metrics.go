@@ -5,8 +5,6 @@ import (
 	"net/http"
 )
 
-
-
 func (a *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		a.fileserverHits.Add(1)

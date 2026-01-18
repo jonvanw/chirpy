@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -19,12 +20,14 @@ func (a *apiConfig) handleAddChirp(w http.ResponseWriter, r *http.Request) {
 
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
+		log.Printf("handleAddChirp: failed to get bearer token: %v", err)
 		http.Error(w, "Unauthorized, no user token provided.", http.StatusUnauthorized)
 		return
 	}
 
 	userId, err := auth.ValidateJWT(token, a.jwtAuthSecret)
 	if err != nil || userId == uuid.Nil {
+		log.Printf("handleAddChirp: failed to validate JWT: %v", err)
 		http.Error(w, "Unauthorized. Invalid user token.", http.StatusUnauthorized)
 		return
 	}
@@ -32,12 +35,14 @@ func (a *apiConfig) handleAddChirp(w http.ResponseWriter, r *http.Request) {
 	var payload database.CreateChirpParams
 	err = json.NewDecoder(r.Body).Decode(&payload)
 	if err != nil {
+		log.Printf("handleAddChirp: failed to decode request body: %v", err)
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 
 	cleanedBody, err := ValidateChirp(payload.Body)
 	if err != nil {
+		log.Printf("handleAddChirp: chirp validation failed: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -46,6 +51,7 @@ func (a *apiConfig) handleAddChirp(w http.ResponseWriter, r *http.Request) {
 
 	chirp, err := a.dbQueries.CreateChirp(r.Context(), payload)
 	if err != nil {
+		log.Printf("handleAddChirp: failed to create chirp: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -58,6 +64,7 @@ func (a *apiConfig) handleAddChirp(w http.ResponseWriter, r *http.Request) {
 func (a *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 	chirps, err := a.dbQueries.GetChirpsByCreation(r.Context())
 	if err != nil {
+		log.Printf("handlerGetChirps: failed to get chirps: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -69,22 +76,25 @@ func (a *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 func (a *apiConfig) handlerGetChirpById(w http.ResponseWriter, r *http.Request) {
 	idText := r.PathValue("chirpId")
 	if idText == "" {
+		log.Printf("handlerGetChirpById: missing ID parameter")
 		http.Error(w, "Missing ID parameter", http.StatusBadRequest)
 		return
 	}
 	id, err := uuid.Parse(idText)
 	if err != nil {
+		log.Printf("handlerGetChirpById: invalid ID parameter: %v", err)
 		http.Error(w, "Invalid ID parameter", http.StatusBadRequest)
 		return
 	}
-	
 
 	chirp, err := a.dbQueries.GetChirpById(r.Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			log.Printf("handlerGetChirpById: chirp not found: %s", id.String())
 			http.Error(w, fmt.Sprintf("Chirp with ID %s not found", id.String()), http.StatusNotFound)
 			return
 		}
+		log.Printf("handlerGetChirpById: failed to get chirp: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

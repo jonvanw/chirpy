@@ -57,6 +57,10 @@ func main() {
 
 	mux.HandleFunc("POST /api/login", appConfig.handleLogin)
 
+	mux.HandleFunc("POST /api/refresh", appConfig.handleRefreshAuthToken)
+
+	mux.HandleFunc("POST /api/revoke", appConfig.handleRevokeRefreshToken)
+
 	log.Println("Starting server on localhost:8080")
 
 	log.Fatal(server.ListenAndServe())
