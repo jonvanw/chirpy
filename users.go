@@ -1,7 +1,9 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -13,7 +15,7 @@ import (
 
 const jwtDuration = time.Hour
 
-type userInfoPost struct {
+type userInfoRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
@@ -33,7 +35,7 @@ func (a *apiConfig) handleAddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	var payload userInfoPost
+	var payload userInfoRequest
 	err := json.NewDecoder(r.Body).Decode(&payload)
 	if err != nil {
 		log.Printf("handleAddUser: failed to decode request body: %v", err)
@@ -41,7 +43,7 @@ func (a *apiConfig) handleAddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	args, err := payload.ToDbArgs()
+	args, err := payload.ToInsertDbArgs()
 	if err != nil {
 		log.Printf("handleAddUser: failed to convert to db args: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -72,7 +74,7 @@ func (a *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var payload userInfoPost
+	var payload userInfoRequest
 	err := json.NewDecoder(r.Body).Decode(&payload)
 	if err != nil {
 		log.Printf("handleLogin: failed to decode request body: %v", err)
@@ -83,7 +85,11 @@ func (a *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 	userRaw, err := a.dbQueries.GetUserByEmail(r.Context(), payload.Email)
 	if err != nil {
 		log.Printf("handleLogin: failed to get user by email: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "User not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -156,7 +162,11 @@ func (a *apiConfig) handleRefreshAuthToken(w http.ResponseWriter, r *http.Reques
 	refreshTokenRecord, err := a.dbQueries.GetRefreshToken(r.Context(), refreshToken)
 	if err != nil {
 		log.Printf("handleRefreshAuthToken: failed to get refresh token from db: %v", err)
-		http.Error(w, "Unauthorized, invalid refresh token.", http.StatusUnauthorized)
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Unauthorized, invalid refresh token.", http.StatusUnauthorized)
+		} else {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
 		return
 	}
 	if refreshTokenRecord.RevokedAt.Valid {
@@ -208,7 +218,11 @@ func (a *apiConfig) handleRevokeRefreshToken(w http.ResponseWriter, r *http.Requ
 	refreshTokenRecord, err := a.dbQueries.GetRefreshToken(r.Context(), refreshToken)
 	if err != nil {
 		log.Printf("handleRevokeRefreshToken: failed to get refresh token from db: %v", err)
-		http.Error(w, "Unauthorized, invalid refresh token.", http.StatusUnauthorized)
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Unauthorized, invalid refresh token.", http.StatusUnauthorized)
+		} else {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
 		return
 	}
 	if refreshTokenRecord.RevokedAt.Valid {
@@ -225,13 +239,81 @@ func (a *apiConfig) handleRevokeRefreshToken(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (a *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-func (u *userInfoPost) ToDbArgs() (database.CreateUserParams, error) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("handleAddChirp: failed to get bearer token: %v", err)
+		http.Error(w, "Unauthorized, no user token provided.", http.StatusUnauthorized)
+		return
+	}
+
+	userId, err := auth.ValidateJWT(token, a.jwtAuthSecret)
+	if err != nil || userId == uuid.Nil {
+		log.Printf("handleAddChirp: failed to validate JWT: %v", err)
+		http.Error(w, "Unauthorized. Invalid user token.", http.StatusUnauthorized)
+		return
+	}
+
+	var payload userInfoRequest
+	err = json.NewDecoder(r.Body).Decode(&payload)
+	if err != nil {
+		log.Printf("handleUpdateUser: failed to decode request body: %v", err)
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	args, err := payload.ToUpdateDbArgs(userId)
+	if err != nil {
+		log.Printf("handleUpdateUser: failed to convert to db args: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	userRaw, err := a.dbQueries.UpdateUser(r.Context(), args)
+	if err != nil {
+		log.Printf("handleUpdateUser: failed to update user: %v", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Unauthorized: unknown user", http.StatusUnauthorized)
+		} else {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	user := userInfoResponse{
+		ID:        userRaw.ID,
+		CreatedAt: userRaw.CreatedAt,
+		UpdatedAt: userRaw.UpdatedAt,
+		Email:     userRaw.Email,
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
+
+func (u *userInfoRequest) ToInsertDbArgs() (database.CreateUserParams, error) {
 	hashed, err := auth.HashPassword(u.Password)
 	if err != nil {
 		return database.CreateUserParams{}, err
 	}
 	return database.CreateUserParams{
+		Email: u.Email,
+		HashedPassword: hashed,
+	}, nil
+}
+
+func (u *userInfoRequest) ToUpdateDbArgs(userId uuid.UUID) (database.UpdateUserParams, error) {
+	hashed, err := auth.HashPassword(u.Password)
+	if err != nil {
+		return database.UpdateUserParams{}, err
+	}
+	return database.UpdateUserParams{
+		ID: userId,
 		Email: u.Email,
 		HashedPassword: hashed,
 	}, nil
