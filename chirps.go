@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/jonvanw/chirpy/internal/auth"
 	"github.com/jonvanw/chirpy/internal/database"
 )
 
@@ -16,8 +17,20 @@ func (a *apiConfig) handleAddChirp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		http.Error(w, "Unauthorized, no user token provided.", http.StatusUnauthorized)
+		return
+	}
+
+	userId, err := auth.ValidateJWT(token, a.jwtAuthSecret)
+	if err != nil || userId == uuid.Nil {
+		http.Error(w, "Unauthorized. Invalid user token.", http.StatusUnauthorized)
+		return
+	}
+
 	var payload database.CreateChirpParams
-	err := json.NewDecoder(r.Body).Decode(&payload)
+	err = json.NewDecoder(r.Body).Decode(&payload)
 	if err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
@@ -28,8 +41,8 @@ func (a *apiConfig) handleAddChirp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	payload.Body = cleanedBody
+	payload.UserID = userId
 
 	chirp, err := a.dbQueries.CreateChirp(r.Context(), payload)
 	if err != nil {

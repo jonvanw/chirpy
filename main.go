@@ -28,6 +28,7 @@ func main() {
 	appConfig := apiConfig{
 		dbQueries: database.New(db),
 		platform: os.Getenv("PLATFORM"),
+		jwtAuthSecret: os.Getenv("JWT_AUTH_SECRET"),
 	}
 
 	mux := http.NewServeMux()
@@ -65,4 +66,5 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	dbQueries 	*database.Queries
 	platform string
+	jwtAuthSecret string
 }

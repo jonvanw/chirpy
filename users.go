@@ -13,6 +13,7 @@ import (
 type userInfoPost struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	ExpiresInSeconds int `json:"expires_in_seconds"`
 }
 
 type userInfoResponse struct {
@@ -20,6 +21,7 @@ type userInfoResponse struct {
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 	Email          string    `json:"email"`
+	Token          string    `json:"token,omitempty"`
 }
 
 func (a *apiConfig) handleAddUser(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +72,7 @@ func (a *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-		
+
 	userRaw, err := a.dbQueries.GetUserByEmail(r.Context(), payload.Email)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -86,11 +88,26 @@ func (a *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	const hourInSeconds = 60 * 60 // min/hr * sec/min
+	if payload.ExpiresInSeconds <= 0 || payload.ExpiresInSeconds > hourInSeconds {
+		payload.ExpiresInSeconds = hourInSeconds
+	}
+	token, err := auth.MakeJWT(
+		userRaw.ID,
+		a.jwtAuthSecret,
+		time.Duration(payload.ExpiresInSeconds) * time.Second,
+	)
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	user := userInfoResponse{
 		ID:        userRaw.ID,
 		CreatedAt: userRaw.CreatedAt,
 		UpdatedAt: userRaw.UpdatedAt,
 		Email:     userRaw.Email,
+		Token:     token,
 	}
 
 	w.WriteHeader(http.StatusOK)
