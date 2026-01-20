@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jonvanw/chirpy/internal/auth"
@@ -63,12 +65,40 @@ func (a *apiConfig) handleAddChirp(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
-	chirps, err := a.dbQueries.GetChirpsByCreation(r.Context())
-	if err != nil {
-		log.Printf("handlerGetChirps: failed to get chirps: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	
+	var chirps []database.Chirp
+	var err error
+	if userIdText := r.URL.Query().Get("author_id"); userIdText != "" {
+		userId, err := uuid.Parse(userIdText)
+		if err != nil {
+			log.Printf("handlerGetChirps: invalid author_id parameter: %v", err)
+			http.Error(w, "Invalid author_id parameter", http.StatusBadRequest)
+			return
+		}
+		chirps, err = a.dbQueries.GetChirpsByUserId(r.Context(), userId)
+		if err != nil {
+			log.Printf("handlerGetChirps: failed to get chirps by user ID: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		chirps, err = a.dbQueries.GetChirpsByCreation(r.Context())
+		if err != nil {
+			log.Printf("handlerGetChirps: failed to get chirps: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	sort := strings.ToLower(r.URL.Query().Get("sort"))
+	if sort == "desc" {
+		slices.Reverse(chirps)
+	}
+
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(chirps)
