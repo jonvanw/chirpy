@@ -27,6 +27,7 @@ type userInfoResponse struct {
 	Email          string    `json:"email"`
 	Token          string    `json:"token,omitempty"`
 	RefreshToken   string    `json:"refresh_token,omitempty"`
+	IsChirpyRed    bool      `json:"is_chirpy_red"`
 }
 
 func (a *apiConfig) handleAddUser(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +62,7 @@ func (a *apiConfig) handleAddUser(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: userRaw.CreatedAt,
 		UpdatedAt: userRaw.UpdatedAt,
 		Email:     userRaw.Email,
+		IsChirpyRed: userRaw.IsChirpyRed,
 	}
 
 	w.WriteHeader(http.StatusCreated)
@@ -140,6 +142,7 @@ func (a *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Email:     userRaw.Email,
 		Token:     jwt,
 		RefreshToken: refreshToken,
+		IsChirpyRed: userRaw.IsChirpyRed,
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -289,6 +292,7 @@ func (a *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: userRaw.CreatedAt,
 		UpdatedAt: userRaw.UpdatedAt,
 		Email:     userRaw.Email,
+		IsChirpyRed: userRaw.IsChirpyRed,
 	}
 
 	w.WriteHeader(http.StatusOK)

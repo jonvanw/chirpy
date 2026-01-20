@@ -3,28 +3,11 @@ package auth
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
-	"net/http"
-	"regexp"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
-
-func GetBearerToken(headers http.Header) (string, error) {
-	authHeader := headers.Get("Authorization")
-	if authHeader == "" {
-		return "", errors.New("authorization header missing")
-	}
-
-	re := regexp.MustCompile(`\bBearer\s+(\S+)`)
-	matches := re.FindStringSubmatch(authHeader)
-	if len(matches) < 2 {
-		return "", errors.New("bearer token not found")
-	}
-	return matches[1], nil
-}
 
 func MakeJWT(userId uuid.UUID, tokenSecret string, expiresIn time.Duration) (string, error) { 
 	claims := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{

@@ -29,6 +29,7 @@ func main() {
 		dbQueries: database.New(db),
 		platform: os.Getenv("PLATFORM"),
 		jwtAuthSecret: os.Getenv("JWT_AUTH_SECRET"),
+		pokaApiKey: os.Getenv("POLKA_KEY"),
 	}
 
 	mux := http.NewServeMux()
@@ -65,6 +66,8 @@ func main() {
 
 	mux.HandleFunc("POST /api/revoke", appConfig.handleRevokeRefreshToken)
 
+	mux.HandleFunc("POST /api/polka/webhooks", appConfig.handlePolkaEvent)
+
 	log.Println("Starting server on localhost:8080")
 
 	log.Fatal(server.ListenAndServe())
@@ -75,4 +78,5 @@ type apiConfig struct {
 	dbQueries 	*database.Queries
 	platform string
 	jwtAuthSecret string
+	pokaApiKey string
 }
